@@ -23,7 +23,6 @@
 ;; this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-
 ;; Provides Evil operators to change text case using s.el transformations.
 ;;
 ;; Available operators:
@@ -39,35 +38,92 @@
 ;;; Code:
 (require 'evil)
 (require 's)
+(require 'cl-lib)
+
+(defgroup evil-case nil
+  "Evil operators to change text case."
+  :group 'evil
+  :prefix "evil-case")
+
+(defcustom evil-case-cycle-sequence
+  '(evil-case-upper
+    evil-case-lower
+    evil-case-snake
+    evil-case-kebab
+    evil-case-camel
+    evil-case-pascal
+    evil-case-title
+    evil-case-sentence)
+  "The sequence of Evil case operators to cycle through."
+  :type '(repeat function)
+  :group 'evil-case)
+
+(defvar evil-case--last-command nil
+  "The last executed evil-case operator. Used to determine the next step in the cycle.")
+
+(defvar-local evil-case--state nil
+  "Vector holding [start-marker end-marker original-string] for the current sequence.")
+
+;;;
+;;; Helpers
+;;;
+
+(defun evil-case--is-valid-repeat (beg)
+  "Return t if we are continuing a sequence of evil-case operations."
+  (and evil-case--state
+       evil-case--last-command
+       ;; Make sure the marker belongs to the current buffer
+       (eq (current-buffer) (marker-buffer (aref evil-case--state 0)))
+       ;; Finally, ensure we are at the exact same start position
+       (= beg (marker-position (aref evil-case--state 0)))))
 
 (defun evil-case--exec-sfunc (fn beg end)
-  "Apply s-func FN to region BEG/END, preserving leading/trailing delimiters."
-  (let ((original-text (buffer-substring-no-properties beg end)))
-    ;; Check if the text is purely whitespace/empty; skip then!
+  "Apply s-func FN to region BEG/END.
+
+If this is a repeated operation, apply FN to the ORIGINAL text found in
+`evil-case--state`, not the current buffer content."
+  (let* ((is-repeat (evil-case--is-valid-repeat beg))
+         (original-text (if is-repeat
+                            (aref evil-case--state 2)
+                          (buffer-substring-no-properties beg end)))
+         ;; If repeating, delete up to the marker (which handles length changes)
+         (delete-end (if is-repeat
+                         (marker-position (aref evil-case--state 1))
+                       end)))
+
+    (unless is-repeat
+      ;; Marker Cleanup
+      ;; Explicitly detach previous state's markers. If we don't, they stay in
+      ;; the buffer's marker-chain and slow down edits until GC runs.
+      (when evil-case--state
+        (set-marker (aref evil-case--state 0) nil)
+        (set-marker (aref evil-case--state 1) nil))
+
+      (setq evil-case--state (vector (copy-marker beg)
+                                     (copy-marker end t) ;; t = insertion moves marker
+                                     original-text)))
+
     (unless (string-blank-p original-text)
       (let* ((len (length original-text))
-             ;; Identify the end of the leading non-alphanumeric chars
              (prefix-end (save-match-data
                            (if (string-match "\\`[^[:alnum:]]*" original-text)
-                               (match-end 0)
-                             0)))
-             ;; Identify the start of the trailing non-alphanumeric chars
+                               (match-end 0) 0)))
              (suffix-start (save-match-data
                              (if (string-match "[^[:alnum:]]*\\'" original-text)
-                                 (match-beginning 0)
-                               len))))
-        ;; Safety check: if prefix overlaps suffix (e.g. text is just "---")
-        ;; we do nothing, as there is no alphanumeric 'body' to transform.
+                                 (match-beginning 0) len))))
         (when (< prefix-end suffix-start)
           (let* ((prefix (substring original-text 0 prefix-end))
                  (suffix (substring original-text suffix-start))
                  (body (substring original-text prefix-end suffix-start))
-                 ;; Apply the transformation ONLY to the core body
                  (modified-body (funcall fn body))
                  (final-text (concat prefix modified-body suffix)))
+
             (goto-char beg)
-            (delete-region beg end)
-            (insert final-text)))))))
+            (delete-region beg delete-end)
+            (insert final-text)
+
+            ;; Update state marker to the new end of the word
+            (set-marker (aref evil-case--state 1) (point))))))))
 
 (defun evil-case--exec (fn beg end &optional type)
   "Execute transformation FN from BEG to END with evil-operator properties."
@@ -89,8 +145,6 @@
            (evil-case--exec-sfunc fn b-beg b-end))
          beg end nil))
        ((memq type '(exclusive inclusive))
-        ;; Treat exclusive motion as inclusive for better behavior with
-        ;; motions like 'evil-forward-word-begin'
         (let* ((end (if (eq type 'exclusive) (1+ end) end))
                (end-marker (copy-marker end)))
           (goto-char beg)
@@ -106,46 +160,64 @@
       (goto-char start-pos))))
 
 (defmacro evil-case--define-operator (name func doc)
-  "Define an evil operator NAME that applies s-func FUNC."
-  `(evil-define-operator ,name (beg end &optional type)
-     ,doc
-     :move-point nil
-     (evil-case--exec #',func beg end type)))
+  "Define an evil operator NAME."
+  `(progn
+     (evil-define-operator ,name (beg end &optional type)
+       ,doc
+       :move-point nil
+       (setq evil-case--last-command ',name)
+       (evil-case--exec #',func beg end type))))
 
-;;;###autoload (autoload 'evil-case-snake "evil-case" nil t)
+;;
+;; Public symbols
+;;
+
+;;;###autoload
 (evil-case--define-operator evil-case-snake s-snake-case
                             "Convert text to snake_case.")
-
-;;;###autoload (autoload 'evil-case-kebab "evil-case" nil t)
+;;;###autoload
 (evil-case--define-operator evil-case-kebab s-dashed-words
                             "Convert text to kebab-case.")
-
-;;;###autoload (autoload 'evil-case-camel "evil-case" nil t)
+;;;###autoload
 (evil-case--define-operator evil-case-camel s-lower-camel-case
                             "Convert text to lowerCamelCase.")
-
-;;;###autoload (autoload 'evil-case-pascal "evil-case" nil t)
+;;;###autoload
 (evil-case--define-operator evil-case-pascal s-upper-camel-case
                             "Convert text to PascalCase (UpperCamelCase).")
-
-;;;###autoload (autoload 'evil-case-sentence "evil-case" nil t)
+;;;###autoload
 (evil-case--define-operator evil-case-sentence s-capitalized-words
                             "Convert text to Sentence case.")
-
-;;;###autoload (autoload 'evil-case-title "evil-case" nil t)
+;;;###autoload
 (evil-case--define-operator evil-case-title s-titleized-words
                             "Convert text to Title Case.")
-
-;;;###autoload (autoload 'evil-case-lower "evil-case" nil t)
+;;;###autoload
 (evil-case--define-operator evil-case-lower s-downcase
                             "Convert text to downcase.")
-
-;;;###autoload (autoload 'evil-case-upper "evil-case" nil t)
+;;;###autoload
 (evil-case--define-operator evil-case-upper s-upcase
                             "Convert text to UPCASE.")
 
+;;;###autoload
+(evil-define-operator evil-case-cycle (beg end type)
+  "Cycle to the next operator in `evil-case-cycle-sequence`."
+  :move-point nil
+  (let* ((current-cmd (or evil-case--last-command
+                          (car (last evil-case-cycle-sequence))))
+         (current-idx (cl-position current-cmd evil-case-cycle-sequence))
+         (next-idx (if current-idx
+                       (mod (1+ current-idx) (length evil-case-cycle-sequence))
+                     0))
+         (next-cmd (or (nth next-idx evil-case-cycle-sequence)
+                       (car evil-case--last-command))))
+
+    (setq evil-case--last-command next-cmd)
+
+    (funcall next-cmd beg end type)
+    (message "Cycled to: %s" next-cmd)))
+
 (defvar evil-case-map
   (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "~") 'evil-case-cycle)
     (define-key map (kbd "c") 'evil-case-camel)
     (define-key map (kbd "p") 'evil-case-pascal)
     (define-key map (kbd "_") 'evil-case-snake)
@@ -159,10 +231,10 @@
 
 (fset 'evil-case-map evil-case-map)
 
-;; Optional Which-Key integration
 (with-eval-after-load 'which-key
-  (let ((prefix-name "Evil Case Transform"))
+  (let ((prefix-name "Evil Case Operators"))
     (which-key-add-keymap-based-replacements evil-case-map
+      "~" '("cycle" . evil-case-cycle)
       "c" '("camelCase" . evil-case-camel)
       "p" '("PascalCase" . evil-case-pascal)
       "_" '("snake_case" . evil-case-snake)
@@ -173,5 +245,3 @@
       "U" '("UPCASE" . evil-case-upper))))
 
 (provide 'evil-case)
-
-;;; evil-case.el ends here
