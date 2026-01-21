@@ -147,7 +147,7 @@
 (defvar evil-case-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "c") 'evil-case-camel)
-    (define-key map (kbd "C") 'evil-case-pascal)
+    (define-key map (kbd "p") 'evil-case-pascal)
     (define-key map (kbd "_") 'evil-case-snake)
     (define-key map (kbd "-") 'evil-case-kebab)
     (define-key map (kbd "s") 'evil-case-sentence)
@@ -164,7 +164,7 @@
   (let ((prefix-name "Evil Case Transform"))
     (which-key-add-keymap-based-replacements evil-case-map
       "c" '("camelCase" . evil-case-camel)
-      "C" '("PascalCase" . evil-case-pascal)
+      "p" '("PascalCase" . evil-case-pascal)
       "_" '("snake_case" . evil-case-snake)
       "-" '("kebab-case" . evil-case-kebab)
       "s" '("Sentence case" . evil-case-sentence)
