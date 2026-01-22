@@ -182,7 +182,11 @@ Handles 'line', 'block', and standard character-wise motions."
           (goto-char beg)
           (while (< (point) end-marker)
             (let* ((limit (min (line-end-position) end-marker)))
-              (evil-case--exec-sfunc fn (point) limit)
+
+              ;; Check to ensure we have a non-empty range
+              (when (< (point) limit)
+                (evil-case--exec-sfunc fn (point) limit))
+
               (if (< limit end-marker)
                   (forward-line 1)
                 (goto-char end-marker))))
