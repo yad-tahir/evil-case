@@ -119,8 +119,7 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
 
     (unless is-repeat
       ;; Marker Cleanup
-      ;; Explicitly detach previous state's markers. If we don't, they stay in
-      ;; the buffer's marker-chain and slow down edits until GC runs.
+      ;; Explicitly detach previous state's markers.
       (when evil-case--state
         (set-marker (aref evil-case--state 0) nil)
         (set-marker (aref evil-case--state 1) nil))
@@ -148,8 +147,12 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
             (delete-region beg delete-end)
             (insert final-text)
 
-            ;; Update state marker to the new end of the word
-            (set-marker (aref evil-case--state 1) (point))))))))
+            ;; We explicitly reset the start and end markers to the new
+            ;; boundaries. This protects against `delete-region` collapsing
+            ;; markers or `insert` moving them unexpectedly.
+            (when evil-case--state
+              (set-marker (aref evil-case--state 0) beg)
+              (set-marker (aref evil-case--state 1) (point)))))))))
 
 (defun evil-case--exec (fn beg end &optional type)
   "Execute transformation FN from BEG to END based on the Evil motion TYPE.
