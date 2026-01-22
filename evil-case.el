@@ -1,44 +1,70 @@
-;;; evil-case.el --- Evil operators to change text case -*- lexical-binding: t; -*-
+;;; evil-case.el --- Evil operators to transform text case -*- lexical-binding: t; -*-
+
+;;         _____         _  _          ____     _     ____   _____
+;;        | ____|__   __(_)| |        / ___|   / \   / ___| | ____|
+;;        |  _|  \ \ / /| || | _____ | |      / _ \  \___ \ |  _|
+;;        | |___  \ V / | || ||_____|| |___  / ___ \  ___) || |___
+;;        |_____|  \_/  |_||_|        \____|/_/   \_\|____/ |_____|
+;;
 
 ;; Author: Yad Tahir (yad at ieee.org)
 ;; URL: https://github.com/yad-tahir/evil-case
 ;; Inspired by: https://github.com/waymondo/transform-symbol-at-point
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "24") (s "1.12.0") (evil "1.14.0"))
-;; License: GNU General Public License version 3, or (at your option) any later
-;; version
-;; Keywords: convenience, tools
+;; Package-Requires: ((emacs "24.4") (s "1.12.0") (evil "1.14.0"))
+;; Keywords: convenience, tools, evil, refactoring
 
-;; This program is free software; you can redistribute it and/or modify it under
-;; the terms of the GNU General Public License as published by the Free Software
-;; Foundation, either version 3 of the License, or (at your option) any later
-;; version.
+;; This file is not part of GNU Emacs.
 
-;; This program is distributed in the hope that it will be useful, but WITHOUT
-;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-;; FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
-;; details.
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
 
-;; You should have received a copy of the GNU General Public License along with
-;; this program.  If not, see <https://www.gnu.org/licenses/>.
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; Provides Evil operators to change text case using s.el transformations.
+;; This package provides a comprehensive set of Evil operators to transform text
+;; casing. Because these are defined as proper Evil operators, they can be
+;; combined with any motion or text object (e.g., change a word, a specific
+;; region, inside quotes, or a visual selection).
 ;;
-;; Available operators:
-;; * `evil-case-camel'    (lowerCamelCase)
-;; * `evil-case-pascal'   (UpperCamelCase)
-;; * `evil-case-snake'    (snake_case)
-;; * `evil-case-kebab'    (kebab-case)
-;; * `evil-case-sentence' (Sentence case)
-;; * `evil-case-title'    (Title Case)
-;; * `evil-case-lower'    (downcase)
-;; * `evil-case-upper'    (UPCASE)
+;; It utilizes the string manipulation library `s.el` to handle the offered
+;; transformations.
+;;
+;; Features:
+;; - Convert between many formats: snake_case, camelCase, PascalCase, kebab-case,
+;;   SCREAMING_SNAKE_CASE, Title Case, Sentence case, etc.
+;; - Full Visual Support: Works correctly with standard Visual mode (`v`),
+;;   Visual Line mode (`V`), and Visual Block mode (`C-v`). In these settings,
+;;   the text transformation is applied to each individual line within the
+;;   selection - avoiding unwanted concatenation.
+;; - A smart "Cycle" operator to rotate the text through the case list.
+;; - Persistence: Repeating the operator (`.`) works correctly.
+;; - Easy Integration: Provides a pre-made keybinding map `evil-case-map' with
+;; built-in `which-key` descriptions.
+;;
+;; Recommended usage:
+;;   (define-key evil-normal-state-map (kbd "g c") 'evil-case-map)
+;;   (define-key evil-visual-state-map (kbd "g c") 'evil-case-map)
+;;
+;;   Then type `g c s iw` to snake_case the inner word.
 
 ;;; Code:
 (require 'evil)
 (require 's)
 (require 'cl-lib)
+
+;; Silence byte-compiler and linter regarding which-key
+;; We are using `fboundp' as safety.
+(declare-function which-key-add-keymap-based-replacements
+                  "which-key" (keymap &rest replacements))
 
 (defgroup evil-case nil
   "Evil operators to change text case."
@@ -69,7 +95,7 @@ will automatically be added to this key map.")
 ;;;
 
 (defun evil-case--is-valid-repeat (beg)
-  "Return t if we are continuing a sequence of evil-case operations."
+  "Return t if we are continuing a sequence of evil-case operations at BEG."
   (and evil-case--state
        evil-case--last-command
        ;; Make sure the marker belongs to the current buffer
@@ -126,7 +152,9 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
             (set-marker (aref evil-case--state 1) (point))))))))
 
 (defun evil-case--exec (fn beg end &optional type)
-  "Execute transformation FN from BEG to END with evil-operator properties."
+  "Execute transformation FN from BEG to END based on the Evil motion TYPE.
+
+Handles 'line', 'block', and standard character-wise motions."
   (evil-with-single-undo
     (let ((start-pos beg))
       (cond
@@ -160,7 +188,7 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
       (goto-char start-pos))))
 
 (defmacro evil-case--define-operator (name key desc func doc)
-  "Define an evil operator NAME.
+  "Define an evil operator NAME to execute FUNC text manipulator.
 
 Also binds it to KEY in `evil-case-map`, adds DESC to which-key,
 and appends it to `evil-case-cycle-sequence'."
@@ -176,12 +204,12 @@ and appends it to `evil-case-cycle-sequence'."
 
      (define-key evil-case-map (kbd ,key) ',name)
 
-     (with-eval-after-load 'which-key
+     (when (fboundp 'which-key-add-keymap-based-replacements)
        (which-key-add-keymap-based-replacements evil-case-map
          ,key (cons ,desc ',name)))))
 
 ;;
-;; Public symbols
+;; Public functions
 ;;
 
 ;;;###autoload
@@ -195,7 +223,7 @@ and appends it to `evil-case-cycle-sequence'."
   "Convert text to PascalCase (UpperCamelCase).")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-snake "s" "snake_case"
+(evil-case--define-operator evil-case-snake "_" "snake_case"
   s-snake-case
   "Convert text to snake_case.")
 
@@ -205,7 +233,7 @@ and appends it to `evil-case-cycle-sequence'."
   "Convert text to SCREAMING_SNAKE_CASE.")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-kebab "k" "kebab-case"
+(evil-case--define-operator evil-case-kebab "-" "kebab-case"
   s-dashed-words
   "Convert text to kebab-case.")
 
@@ -215,7 +243,7 @@ and appends it to `evil-case-cycle-sequence'."
   "Convert text to SCREAMING-KEBAB-CASE.")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-sentence "." "Sentence case"
+(evil-case--define-operator evil-case-sentence "s" "Sentence case"
   s-capitalized-words
   "Convert text to Sentence case.")
 
@@ -255,8 +283,9 @@ and appends it to `evil-case-cycle-sequence'."
 
 ;; Manually add cycle binding
 (define-key evil-case-map (kbd "~") 'evil-case-cycle)
-(with-eval-after-load 'which-key
+(when (fboundp 'which-key-add-keymap-based-replacements)
   (which-key-add-keymap-based-replacements evil-case-map
     "~" '("cycle" . evil-case-cycle)))
 
 (provide 'evil-case)
+;;; evil-case.el ends here
