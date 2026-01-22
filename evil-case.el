@@ -125,7 +125,8 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
         (set-marker (aref evil-case--state 1) nil))
 
       (setq evil-case--state (vector (copy-marker beg)
-                                     (copy-marker end t) ;; t = insertion moves marker
+                                     ;; t = insertion moves marker
+                                     (copy-marker end t)
                                      original-text)))
 
     (unless (string-blank-p original-text)
@@ -142,11 +143,9 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
                  (body (substring original-text prefix-end suffix-start))
                  (modified-body (funcall fn body))
                  (final-text (concat prefix modified-body suffix)))
-
             (goto-char beg)
             (delete-region beg delete-end)
             (insert final-text)
-
             ;; We explicitly reset the start and end markers to the new
             ;; boundaries. This protects against `delete-region` collapsing
             ;; markers or `insert` moving them unexpectedly.
@@ -170,11 +169,13 @@ Handles 'line', 'block', and standard character-wise motions."
               (evil-case--exec-sfunc fn l-beg l-end)
               (forward-line 1)))
           (set-marker end-marker nil)))
+
        ((eq type 'block)
         (evil-apply-on-block
          (lambda (b-beg b-end &rest _args)
            (evil-case--exec-sfunc fn b-beg b-end))
          beg end nil))
+
        ((memq type '(exclusive inclusive))
         (let* ((end (if (eq type 'exclusive) (1+ end) end))
                (end-marker (copy-marker end)))
@@ -186,6 +187,7 @@ Handles 'line', 'block', and standard character-wise motions."
                   (forward-line 1)
                 (goto-char end-marker))))
           (set-marker end-marker nil)))
+
        (t
         (evil-case--exec-sfunc fn beg end)))
       (goto-char start-pos))))
@@ -291,4 +293,5 @@ and appends it to `evil-case-cycle-sequence'."
     "~" '("cycle" . evil-case-cycle)))
 
 (provide 'evil-case)
+
 ;;; evil-case.el ends here
