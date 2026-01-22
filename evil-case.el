@@ -10,7 +10,7 @@
 ;; Author: Yad Tahir (yad at ieee.org)
 ;; URL: https://github.com/yad-tahir/evil-case
 ;; Inspired by: https://github.com/waymondo/transform-symbol-at-point
-;; Version: 0.2
+;; Version: 0.3
 ;; Package-Requires: ((emacs "24.4") (s "1.12.0") (evil "1.14.0"))
 ;; Keywords: convenience, tools, evil, refactoring
 
