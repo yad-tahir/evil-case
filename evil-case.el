@@ -80,7 +80,8 @@ Populated automatically by `evil-case--define-operator'.")
   "The last executed evil-case operator. Used to determine the next step in the cycle.")
 
 (defvar-local evil-case--state nil
-  "Vector holding [start-marker end-marker original-string] for the current sequence.")
+  "Vector holding [start-marker end-marker original-string current-text] for the
+ current sequence.")
 
 ;; Keymap
 (define-prefix-command 'evil-case-map)
@@ -94,13 +95,15 @@ will automatically be added to this key map.")
 ;;; Helpers
 ;;;
 
-(defun evil-case--is-valid-repeat (beg)
+(defun evil-case--is-valid-repeat (beg current-text)
   "Return t if we are continuing a sequence of evil-case operations at BEG."
   (and evil-case--state
        evil-case--last-command
        ;; Make sure the marker belongs to the current buffer
        (eq (current-buffer) (marker-buffer (aref evil-case--state 0)))
-       ;; Finally, ensure we are at the exact same start position
+       ;; No intermediate text modifications
+       (string= current-text (aref evil-case--state 3))
+       ;; Same start position
        (= beg (marker-position (aref evil-case--state 0)))))
 
 (defun evil-case--exec-sfunc (fn beg end)
@@ -108,10 +111,11 @@ will automatically be added to this key map.")
 
 If this is a repeated operation, apply FN to the ORIGINAL text found in
 `evil-case--state`, not the current buffer content."
-  (let* ((is-repeat (evil-case--is-valid-repeat beg))
+  (let* ((current-text (buffer-substring-no-properties beg end))
+         (is-repeat (evil-case--is-valid-repeat beg current-text))
          (original-text (if is-repeat
                             (aref evil-case--state 2)
-                          (buffer-substring-no-properties beg end)))
+                          current-text))
          ;; If repeating, delete up to the marker (which handles length changes)
          (delete-end (if is-repeat
                          (marker-position (aref evil-case--state 1))
@@ -127,7 +131,8 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
       (setq evil-case--state (vector (copy-marker beg)
                                      ;; t = insertion moves marker
                                      (copy-marker end t)
-                                     original-text)))
+                                     original-text
+                                     nil)))
 
     (unless (string-blank-p original-text)
       (let* ((len (length original-text))
@@ -151,7 +156,8 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
             ;; markers or `insert` moving them unexpectedly.
             (when evil-case--state
               (set-marker (aref evil-case--state 0) beg)
-              (set-marker (aref evil-case--state 1) (point)))))))))
+              (set-marker (aref evil-case--state 1) (point))
+              (aset evil-case--state 3 final-text))))))))
 
 (defun evil-case--exec (fn beg end &optional type)
   "Execute transformation FN from BEG to END based on the Evil motion TYPE.
