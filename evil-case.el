@@ -190,32 +190,32 @@ and appends it to `evil-case-cycle-sequence'."
   "Convert text to lowerCamelCase.")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-pascal "p" "PascalCase"
+(evil-case--define-operator evil-case-pascal "C" "PascalCase"
   s-upper-camel-case
   "Convert text to PascalCase (UpperCamelCase).")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-snake "_" "snake_case"
+(evil-case--define-operator evil-case-snake "s" "snake_case"
   s-snake-case
   "Convert text to snake_case.")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-screaming-snake "$" "SCREAMING_SNAKE"
+(evil-case--define-operator evil-case-screaming-snake "S" "SCREAMING_SNAKE"
   (lambda (s) (upcase (s-snake-case s)))
   "Convert text to SCREAMING_SNAKE_CASE.")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-kebab "-" "kebab-case"
+(evil-case--define-operator evil-case-kebab "k" "kebab-case"
   s-dashed-words
   "Convert text to kebab-case.")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-screaming-kebab "#" "SCREAMING-KEBAB"
+(evil-case--define-operator evil-case-screaming-kebab "K" "SCREAMING-KEBAB"
   (lambda (s) (upcase (s-dashed-words s)))
   "Convert text to SCREAMING-KEBAB-CASE.")
 
 ;;;###autoload
-(evil-case--define-operator evil-case-sentence "s" "Sentence case"
+(evil-case--define-operator evil-case-sentence "." "Sentence case"
   s-capitalized-words
   "Convert text to Sentence case.")
 
@@ -233,7 +233,6 @@ and appends it to `evil-case-cycle-sequence'."
 (evil-case--define-operator evil-case-upper "U" "UPCASE"
   s-upcase
   "Convert text to UPCASE.")
-
 
 ;;; Cycle Operator (Manually defined as it behaves differently)
 ;;;###autoload
