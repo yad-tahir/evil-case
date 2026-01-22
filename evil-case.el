@@ -50,6 +50,7 @@
     evil-case-lower
     evil-case-snake
     evil-case-kebab
+    evil-case-screaming-kebab
     evil-case-camel
     evil-case-pascal
     evil-case-title
@@ -176,6 +177,10 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
 (evil-case--define-operator evil-case-snake s-snake-case
                             "Convert text to snake_case.")
 ;;;###autoload
+(evil-case--define-operator evil-case-screaming-kebab
+                            (lambda (s) (upcase (s-dashed-words s)))
+                            "Convert text to SCREAMING-KEBAB-CASE.")
+;;;###autoload
 (evil-case--define-operator evil-case-kebab s-dashed-words
                             "Convert text to kebab-case.")
 ;;;###autoload
@@ -222,6 +227,7 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
     (define-key map (kbd "p") 'evil-case-pascal)
     (define-key map (kbd "_") 'evil-case-snake)
     (define-key map (kbd "-") 'evil-case-kebab)
+    (define-key map (kbd "#") 'evil-case-screaming-kebab)
     (define-key map (kbd "s") 'evil-case-sentence)
     (define-key map (kbd "t") 'evil-case-title)
     (define-key map (kbd "u") 'evil-case-lower)
@@ -239,6 +245,7 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
       "p" '("PascalCase" . evil-case-pascal)
       "_" '("snake_case" . evil-case-snake)
       "-" '("kebab-case" . evil-case-kebab)
+      "#" '("SCREAMING-KEBAB" . evil-case-screaming-kebab)
       "s" '("Sentence case" . evil-case-sentence)
       "t" '("Title Case" . evil-case-title)
       "u" '("downcase" . evil-case-lower)
