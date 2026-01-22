@@ -272,14 +272,13 @@ and appends it to `evil-case-cycle-sequence'."
 (evil-define-operator evil-case-cycle (beg end type)
   "Cycle to the next operator in `evil-case-cycle-sequence`."
   :move-point nil
-  (let* ((current-cmd (or evil-case--last-command
-                          (car (last evil-case-cycle-sequence))))
-         (current-idx (cl-position current-cmd evil-case-cycle-sequence))
-         (next-idx (if current-idx
-                       (mod (1+ current-idx) (length evil-case-cycle-sequence))
-                     0))
-         (next-cmd (or (nth next-idx evil-case-cycle-sequence)
-                       (car evil-case--last-command))))
+  (let* ((last-cmd evil-case--last-command)
+         ;; If no last command, or last command isn't in our list, start at the beginning
+         (start-index (if (and last-cmd (memq last-cmd evil-case-cycle-sequence))
+                          (cl-position last-cmd evil-case-cycle-sequence)
+                        -1))
+         (next-index (mod (1+ start-index) (length evil-case-cycle-sequence)))
+         (next-cmd (nth next-index evil-case-cycle-sequence)))
 
     (setq evil-case--last-command next-cmd)
 
