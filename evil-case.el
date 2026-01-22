@@ -45,26 +45,24 @@
   :group 'evil
   :prefix "evil-case")
 
-(defcustom evil-case-cycle-sequence
-  '(evil-case-upper
-    evil-case-lower
-    evil-case-snake
-    evil-case-screaming-snake
-    evil-case-kebab
-    evil-case-screaming-kebab
-    evil-case-camel
-    evil-case-pascal
-    evil-case-title
-    evil-case-sentence)
-  "The sequence of Evil case operators to cycle through."
-  :type '(repeat function)
-  :group 'evil-case)
+(defvar evil-case-cycle-sequence nil
+  "The sequence of Evil case operators to cycle through.
+
+Populated automatically by `evil-case--define-operator'.")
 
 (defvar evil-case--last-command nil
   "The last executed evil-case operator. Used to determine the next step in the cycle.")
 
 (defvar-local evil-case--state nil
   "Vector holding [start-marker end-marker original-string] for the current sequence.")
+
+;; Keymap
+(define-prefix-command 'evil-case-map)
+(put 'evil-case-map 'variable-documentation
+     "Keymap for `evil-case'.
+
+A new case operator introduced by calling `evil-case--define-operator'
+will automatically be added to this key map.")
 
 ;;;
 ;;; Helpers
@@ -161,52 +159,83 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
         (evil-case--exec-sfunc fn beg end)))
       (goto-char start-pos))))
 
-(defmacro evil-case--define-operator (name func doc)
-  "Define an evil operator NAME."
+(defmacro evil-case--define-operator (name key desc func doc)
+  "Define an evil operator NAME.
+
+Also binds it to KEY in `evil-case-map`, adds DESC to which-key,
+and appends it to `evil-case-cycle-sequence'."
+  (declare (indent defun))
   `(progn
      (evil-define-operator ,name (beg end &optional type)
        ,doc
        :move-point nil
        (setq evil-case--last-command ',name)
-       (evil-case--exec #',func beg end type))))
+       (evil-case--exec #',func beg end type))
+
+     (add-to-list 'evil-case-cycle-sequence ',name t)
+
+     (define-key evil-case-map (kbd ,key) ',name)
+
+     (with-eval-after-load 'which-key
+       (which-key-add-keymap-based-replacements evil-case-map
+         ,key (cons ,desc ',name)))))
 
 ;;
 ;; Public symbols
 ;;
 
 ;;;###autoload
-(evil-case--define-operator evil-case-screaming-snake
-                            (lambda (s) (upcase (s-snake-case s)))
-                            "Convert text to SCREAMING_SNAKE_CASE.")
-;;;###autoload
-(evil-case--define-operator evil-case-snake s-snake-case
-                            "Convert text to snake_case.")
-;;;###autoload
-(evil-case--define-operator evil-case-screaming-kebab
-                            (lambda (s) (upcase (s-dashed-words s)))
-                            "Convert text to SCREAMING-KEBAB-CASE.")
-;;;###autoload
-(evil-case--define-operator evil-case-kebab s-dashed-words
-                            "Convert text to kebab-case.")
-;;;###autoload
-(evil-case--define-operator evil-case-camel s-lower-camel-case
-                            "Convert text to lowerCamelCase.")
-;;;###autoload
-(evil-case--define-operator evil-case-pascal s-upper-camel-case
-                            "Convert text to PascalCase (UpperCamelCase).")
-;;;###autoload
-(evil-case--define-operator evil-case-sentence s-capitalized-words
-                            "Convert text to Sentence case.")
-;;;###autoload
-(evil-case--define-operator evil-case-title s-titleized-words
-                            "Convert text to Title Case.")
-;;;###autoload
-(evil-case--define-operator evil-case-lower s-downcase
-                            "Convert text to downcase.")
-;;;###autoload
-(evil-case--define-operator evil-case-upper s-upcase
-                            "Convert text to UPCASE.")
+(evil-case--define-operator evil-case-camel "c" "camelCase"
+  s-lower-camel-case
+  "Convert text to lowerCamelCase.")
 
+;;;###autoload
+(evil-case--define-operator evil-case-pascal "p" "PascalCase"
+  s-upper-camel-case
+  "Convert text to PascalCase (UpperCamelCase).")
+
+;;;###autoload
+(evil-case--define-operator evil-case-snake "_" "snake_case"
+  s-snake-case
+  "Convert text to snake_case.")
+
+;;;###autoload
+(evil-case--define-operator evil-case-screaming-snake "$" "SCREAMING_SNAKE"
+  (lambda (s) (upcase (s-snake-case s)))
+  "Convert text to SCREAMING_SNAKE_CASE.")
+
+;;;###autoload
+(evil-case--define-operator evil-case-kebab "-" "kebab-case"
+  s-dashed-words
+  "Convert text to kebab-case.")
+
+;;;###autoload
+(evil-case--define-operator evil-case-screaming-kebab "#" "SCREAMING-KEBAB"
+  (lambda (s) (upcase (s-dashed-words s)))
+  "Convert text to SCREAMING-KEBAB-CASE.")
+
+;;;###autoload
+(evil-case--define-operator evil-case-sentence "s" "Sentence case"
+  s-capitalized-words
+  "Convert text to Sentence case.")
+
+;;;###autoload
+(evil-case--define-operator evil-case-title "t" "Title Case"
+  s-titleized-words
+  "Convert text to Title Case.")
+
+;;;###autoload
+(evil-case--define-operator evil-case-lower "u" "downcase"
+  s-downcase
+  "Convert text to downcase.")
+
+;;;###autoload
+(evil-case--define-operator evil-case-upper "U" "UPCASE"
+  s-upcase
+  "Convert text to UPCASE.")
+
+
+;;; Cycle Operator (Manually defined as it behaves differently)
 ;;;###autoload
 (evil-define-operator evil-case-cycle (beg end type)
   "Cycle to the next operator in `evil-case-cycle-sequence`."
@@ -225,37 +254,10 @@ If this is a repeated operation, apply FN to the ORIGINAL text found in
     (funcall next-cmd beg end type)
     (message "Cycled to: %s" next-cmd)))
 
-(defvar evil-case-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "~") 'evil-case-cycle)
-    (define-key map (kbd "c") 'evil-case-camel)
-    (define-key map (kbd "p") 'evil-case-pascal)
-    (define-key map (kbd "_") 'evil-case-snake)
-    (define-key map (kbd "$") 'evil-case-screaming-snake)
-    (define-key map (kbd "-") 'evil-case-kebab)
-    (define-key map (kbd "#") 'evil-case-screaming-kebab)
-    (define-key map (kbd "s") 'evil-case-sentence)
-    (define-key map (kbd "t") 'evil-case-title)
-    (define-key map (kbd "u") 'evil-case-lower)
-    (define-key map (kbd "U") 'evil-case-upper)
-    map)
-  "Keymap for `evil-case'.")
-
-(fset 'evil-case-map evil-case-map)
-
+;; Manually add cycle binding
+(define-key evil-case-map (kbd "~") 'evil-case-cycle)
 (with-eval-after-load 'which-key
-  (let ((prefix-name "Evil Case Operators"))
-    (which-key-add-keymap-based-replacements evil-case-map
-      "~" '("cycle" . evil-case-cycle)
-      "c" '("camelCase" . evil-case-camel)
-      "p" '("PascalCase" . evil-case-pascal)
-      "_" '("snake_case" . evil-case-snake)
-      "$" '("SCREAMING_sneak" . evil-case-screaming-snake)
-      "-" '("kebab-case" . evil-case-kebab)
-      "#" '("SCREAMING-KEBAB" . evil-case-screaming-kebab)
-      "s" '("Sentence case" . evil-case-sentence)
-      "t" '("Title Case" . evil-case-title)
-      "u" '("downcase" . evil-case-lower)
-      "U" '("UPCASE" . evil-case-upper))))
+  (which-key-add-keymap-based-replacements evil-case-map
+    "~" '("cycle" . evil-case-cycle)))
 
 (provide 'evil-case)
